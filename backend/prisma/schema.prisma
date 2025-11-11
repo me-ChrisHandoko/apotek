@@ -1,0 +1,497 @@
+// Pharmacy Management System - Multi-tenant Database Schema
+// Supports both single and multi-tenant architecture
+// Designed for core pharmacy operations without over-engineering
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== ENUMS ====================
+
+enum UserRole {
+  ADMIN
+  PHARMACIST
+  CASHIER
+  MANAGER
+}
+
+enum UnitType {
+  TABLET
+  CAPSULE
+  SYRUP
+  INJECTION
+  CREAM
+  DROPS
+  OINTMENT
+  POWDER
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  INSURANCE
+  DIGITAL_WALLET
+}
+
+enum PaymentStatus {
+  PAID
+  PARTIAL
+  PENDING
+}
+
+enum SaleStatus {
+  COMPLETED
+  CANCELLED
+  RETURNED
+}
+
+enum PrescriptionStatus {
+  ACTIVE
+  DISPENSED
+  EXPIRED
+  CANCELLED
+}
+
+enum PurchaseOrderStatus {
+  PENDING
+  RECEIVED
+  CANCELLED
+}
+
+enum AdjustmentType {
+  DAMAGE
+  EXPIRY
+  THEFT
+  CORRECTION
+  RETURN
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  VIEW
+}
+
+enum DEASchedule {
+  SCHEDULE_I // High potential for abuse, no accepted medical use
+  SCHEDULE_II // High potential for abuse, accepted medical use, severe restrictions
+  SCHEDULE_III // Moderate to low potential for abuse
+  SCHEDULE_IV // Low potential for abuse
+  SCHEDULE_V // Lower potential for abuse than Schedule IV
+  UNSCHEDULED // Not a controlled substance
+}
+
+// ==================== MODELS ====================
+
+// Tenant - Root entity for multi-tenant support
+model Tenant {
+  id        String   @id @default(cuid())
+  code      String   @unique // Unique identifier for tenant
+  name      String
+  address   String?
+  phone     String?
+  email     String?
+  settings  Json? // Tenant-specific configuration
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  users             User[]
+  products          Product[]
+  productCategories ProductCategory[]
+  productBatches    ProductBatch[]
+  customers         Customer[]
+  suppliers         Supplier[]
+  prescriptions     Prescription[]
+  sales             Sale[]
+  purchaseOrders    PurchaseOrder[]
+  stockAdjustments  StockAdjustment[]
+  auditLogs         AuditLog[]
+
+  @@index([code])
+}
+
+// User - Staff and employees
+model User {
+  id                   String    @id @default(cuid())
+  tenantId             String
+  username             String
+  email                String
+  password             String // Should be hashed
+  fullName             String
+  role                 UserRole
+  phone                String?
+  isActive             Boolean   @default(true)
+  failedLoginAttempts  Int       @default(0) // Track failed login attempts
+  accountLockedUntil   DateTime? // Account lockout timestamp
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  // Relations
+  tenant              Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  sales               Sale[]
+  stockAdjustments    StockAdjustment[]
+  auditLogs           AuditLog[]
+  refreshTokens       RefreshToken[] // JWT refresh tokens
+  passwordResetTokens PasswordResetToken[] // Password reset tokens
+
+  @@unique([tenantId, username])
+  @@index([tenantId])
+  @@index([username])
+}
+
+// ProductCategory - Product classification
+model ProductCategory {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  products Product[]
+
+  @@index([tenantId])
+}
+
+// Product - Medicine/Item master data
+model Product {
+  id                   String       @id @default(cuid())
+  tenantId             String
+  code                 String // SKU or product code
+  barcode              String? // UPC/EAN/GS1 barcode for POS scanning
+  name                 String
+  genericName          String?
+  manufacturer         String?
+  categoryId           String?
+  unitType             UnitType
+  description          String?
+  requiresPrescription Boolean      @default(false)
+  deaSchedule          DEASchedule? @default(UNSCHEDULED) // Controlled substance classification
+  minStockLevel        Int          @default(0)
+  isActive             Boolean      @default(true)
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+
+  // Relations
+  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  category          ProductCategory?   @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  batches           ProductBatch[]
+  saleItems         SaleItem[]
+  prescriptionItems PrescriptionItem[]
+
+  @@unique([tenantId, code])
+  @@unique([tenantId, barcode])
+  @@index([tenantId])
+  @@index([tenantId, categoryId])
+  @@index([tenantId, deaSchedule])
+  @@index([barcode])
+}
+
+// ProductBatch - Batch-level inventory with expiry tracking
+model ProductBatch {
+  id           String   @id @default(cuid())
+  tenantId     String
+  productId    String
+  batchNumber  String
+  expiryDate   DateTime
+  quantity     Int
+  costPrice    Decimal  @db.Decimal(10, 2)
+  sellingPrice Decimal  @db.Decimal(10, 2)
+  supplierId   String?
+  receivedDate DateTime @default(now())
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  product          Product           @relation(fields: [productId], references: [id], onDelete: Restrict)
+  supplier         Supplier?         @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  saleItems        SaleItem[]
+  stockAdjustments StockAdjustment[]
+
+  @@index([tenantId])
+  @@index([tenantId, productId])
+  @@index([expiryDate])
+  @@index([supplierId])
+}
+
+// Customer - Customer information
+model Customer {
+  id                String    @id @default(cuid())
+  tenantId          String
+  code              String // Customer code
+  name              String
+  phone             String?
+  email             String?
+  address           String?
+  dateOfBirth       DateTime?
+  allergies         Json? // Store allergy information
+  notes             String?
+  // Insurance information
+  insuranceProvider String? // Insurance company name
+  insurancePolicyNo String? // Policy/member number
+  insuranceGroupNo  String? // Group number
+  insuranceExpiry   DateTime? // Policy expiration date
+  insuranceNotes    String? // Additional insurance notes
+  isActive          Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  sales         Sale[]
+  prescriptions Prescription[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@index([phone])
+  @@index([insurancePolicyNo])
+}
+
+// Supplier - Supplier information
+model Supplier {
+  id            String   @id @default(cuid())
+  tenantId      String
+  code          String // Supplier code
+  name          String
+  contactPerson String?
+  phone         String?
+  email         String?
+  address       String?
+  paymentTerms  String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  productBatches ProductBatch[]
+  purchaseOrders PurchaseOrder[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+}
+
+// Prescription - Doctor prescriptions
+model Prescription {
+  id                 String             @id @default(cuid())
+  tenantId           String
+  customerId         String
+  prescriptionNumber String
+  doctorName         String
+  doctorLicense      String?
+  issueDate          DateTime
+  validUntil         DateTime?
+  diagnosis          String?
+  notes              String?
+  status             PrescriptionStatus @default(ACTIVE)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  // Relations
+  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  customer          Customer           @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  prescriptionItems PrescriptionItem[]
+  sales             Sale[]
+
+  @@unique([tenantId, prescriptionNumber])
+  @@index([tenantId])
+  @@index([customerId])
+  @@index([status])
+}
+
+// PrescriptionItem - Prescription details
+model PrescriptionItem {
+  id             String   @id @default(cuid())
+  prescriptionId String
+  productId      String
+  dosage         String // e.g., "500mg"
+  frequency      String // e.g., "3 times daily"
+  duration       String // e.g., "7 days"
+  quantity       Int
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  prescription Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  product      Product      @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([prescriptionId])
+  @@index([productId])
+}
+
+// Sale - Transaction headers
+model Sale {
+  id             String        @id @default(cuid())
+  tenantId       String
+  invoiceNumber  String
+  customerId     String?
+  prescriptionId String?
+  subtotal       Decimal       @db.Decimal(10, 2)
+  discount       Decimal       @default(0) @db.Decimal(10, 2)
+  tax            Decimal       @default(0) @db.Decimal(10, 2)
+  total          Decimal       @db.Decimal(10, 2)
+  paymentMethod  PaymentMethod
+  paymentStatus  PaymentStatus @default(PENDING)
+  status         SaleStatus    @default(COMPLETED)
+  soldBy         String // User ID
+  notes          String?
+  saleDate       DateTime      @default(now())
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  // Relations
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  customer     Customer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  prescription Prescription? @relation(fields: [prescriptionId], references: [id], onDelete: SetNull)
+  user         User          @relation(fields: [soldBy], references: [id], onDelete: Restrict)
+  saleItems    SaleItem[]
+
+  @@unique([tenantId, invoiceNumber])
+  @@index([tenantId])
+  @@index([customerId])
+  @@index([tenantId, status])
+  @@index([saleDate])
+}
+
+// SaleItem - Transaction details
+model SaleItem {
+  id             String   @id @default(cuid())
+  saleId         String
+  productBatchId String
+  productId      String
+  quantity       Int
+  unitPrice      Decimal  @db.Decimal(10, 2)
+  discount       Decimal  @default(0) @db.Decimal(10, 2)
+  total          Decimal  @db.Decimal(10, 2)
+  expiryDate     DateTime // Copy for audit trail
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  sale         Sale         @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  productBatch ProductBatch @relation(fields: [productBatchId], references: [id], onDelete: Restrict)
+  product      Product      @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([saleId])
+  @@index([productBatchId])
+  @@index([productId])
+}
+
+// PurchaseOrder - Supplier orders
+model PurchaseOrder {
+  id           String              @id @default(cuid())
+  tenantId     String
+  supplierId   String
+  orderNumber  String
+  orderDate    DateTime            @default(now())
+  expectedDate DateTime?
+  status       PurchaseOrderStatus @default(PENDING)
+  total        Decimal             @db.Decimal(10, 2)
+  notes        String?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  // Relations
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, orderNumber])
+  @@index([tenantId])
+  @@index([supplierId])
+  @@index([status])
+}
+
+// StockAdjustment - Inventory adjustments
+model StockAdjustment {
+  id             String         @id @default(cuid())
+  tenantId       String
+  productBatchId String
+  adjustmentType AdjustmentType
+  quantityBefore Int
+  quantityAfter  Int
+  reason         String
+  adjustedBy     String // User ID
+  adjustmentDate DateTime       @default(now())
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  // Relations
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  productBatch ProductBatch @relation(fields: [productBatchId], references: [id], onDelete: Restrict)
+  user         User         @relation(fields: [adjustedBy], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([productBatchId])
+  @@index([adjustmentDate])
+}
+
+// AuditLog - Activity tracking for compliance
+model AuditLog {
+  id         String      @id @default(cuid())
+  tenantId   String
+  userId     String
+  entityType String // e.g., "Product", "Sale"
+  entityId   String
+  action     AuditAction
+  oldValues  Json? // Values before change
+  newValues  Json? // Values after change
+  ipAddress  String?
+  timestamp  DateTime    @default(now())
+
+  // Relations
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([timestamp])
+}
+
+// RefreshToken - JWT refresh token storage
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  revoked   Boolean  @default(false) // Token revocation status
+  createdAt DateTime @default(now())
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@index([expiresAt])
+}
+
+// PasswordResetToken - Password reset token storage
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false) // Whether token has been used
+  createdAt DateTime @default(now())
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@index([expiresAt])
+}
