@@ -323,11 +323,11 @@ export class ProductService {
         expiryDate: { gt: new Date() }, // Only count non-expired batches
       },
       select: {
-        quantity: true,
+        currentQuantity: true,
       },
     });
 
-    return batches.reduce((total, batch) => total + batch.quantity, 0);
+    return batches.reduce((total, batch) => total + batch.currentQuantity, 0);
   }
 
   async search(query: SearchProductDto, tenantId: string) {

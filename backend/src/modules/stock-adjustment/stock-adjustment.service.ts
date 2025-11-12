@@ -60,7 +60,7 @@ export class StockAdjustmentService {
       }
 
       // Calculate new quantity
-      const quantityBefore = batch.quantity;
+      const quantityBefore = batch.currentQuantity;
       const quantityAfter = quantityBefore + dto.quantityChange;
 
       // Validate quantity will not go negative
@@ -128,7 +128,7 @@ export class StockAdjustmentService {
       await tx.productBatch.update({
         where: { id: dto.productBatchId },
         data: {
-          quantity: quantityAfter,
+          currentQuantity: quantityAfter,
           // Optionally deactivate if quantity becomes zero
           ...(quantityAfter === 0 && { isActive: false }),
         },

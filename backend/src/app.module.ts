@@ -16,10 +16,13 @@ import { SupplierModule } from './modules/supplier/supplier.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { StockAdjustmentModule } from './modules/stock-adjustment/stock-adjustment.module';
 import { PrescriptionModule } from './modules/prescription/prescription.module';
+import { SalesModule } from './modules/sales/sales.module';
+import { PurchaseOrderModule } from './modules/purchase-order/purchase-order.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
+import { AuditLogInterceptor } from './common/interceptors/audit-log.interceptor';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { TenantContextMiddleware } from './common/middleware/tenant-context.middleware';
@@ -82,6 +85,10 @@ import { validateEnvironment } from './config/env.validation';
     InventoryModule,
     StockAdjustmentModule,
     PrescriptionModule,
+
+    // Phase 4: Sales & Purchase Operations
+    SalesModule,
+    PurchaseOrderModule,
   ],
   controllers: [AppController],
   providers: [
@@ -103,6 +110,10 @@ import { validateEnvironment } from './config/env.validation';
     {
       provide: APP_INTERCEPTOR,
       useClass: LoggingInterceptor,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: AuditLogInterceptor,
     },
 
     // Global Guards (order matters!)

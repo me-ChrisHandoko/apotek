@@ -76,7 +76,8 @@ export class InventoryService {
         id: batchId,
         productId: dto.productId,
         batchNumber: dto.batchNumber,
-        quantity: dto.quantity,
+        initialQuantity: dto.quantity,
+        currentQuantity: dto.quantity,
         costPrice: dto.purchasePrice,
         sellingPrice: dto.purchasePrice, // Default selling price same as cost
         receivedDate: manufacturingDate,
@@ -257,11 +258,11 @@ export class InventoryService {
         batches: {
           where: {
             isActive: true,
-            quantity: { gt: 0 },
+            currentQuantity: { gt: 0 },
             expiryDate: { gt: new Date() },
           },
           select: {
-            quantity: true,
+            currentQuantity: true,
             expiryDate: true,
           },
         },
@@ -274,7 +275,7 @@ export class InventoryService {
 
     const data = products.map((product) => {
       const currentStock = product.batches.reduce(
-        (sum, batch) => sum + batch.quantity,
+        (sum, batch) => sum + batch.currentQuantity,
         0,
       );
       const isLowStock = currentStock < product.minStockLevel;
@@ -318,10 +319,10 @@ export class InventoryService {
         batches: {
           where: {
             isActive: true,
-            quantity: { gt: 0 },
+            currentQuantity: { gt: 0 },
             expiryDate: { gt: new Date() },
           },
-          select: { quantity: true },
+          select: { currentQuantity: true },
         },
         category: {
           select: { name: true },
@@ -332,7 +333,7 @@ export class InventoryService {
     const lowStockProducts = products
       .map((product) => {
         const currentStock = product.batches.reduce(
-          (sum, batch) => sum + batch.quantity,
+          (sum, batch) => sum + batch.currentQuantity,
           0,
         );
         const minStock = threshold || product.minStockLevel;
@@ -368,7 +369,7 @@ export class InventoryService {
       where: {
         tenantId,
         isActive: true,
-        quantity: { gt: 0 },
+        currentQuantity: { gt: 0 },
         expiryDate: {
           gte: today,
           lte: futureDate,
@@ -398,7 +399,7 @@ export class InventoryService {
         batchId: batch.id,
         batchNumber: batch.batchNumber,
         productName: batch.product.name,
-        quantity: batch.quantity,
+        quantity: batch.currentQuantity,
         expiryDate: batch.expiryDate,
         daysUntilExpiry,
         severity,
@@ -430,14 +431,14 @@ export class InventoryService {
         productId,
         tenantId,
         isActive: true,
-        quantity: { gt: 0 },
+        currentQuantity: { gt: 0 },
         expiryDate: { gt: new Date() },
       },
       orderBy: { expiryDate: 'asc' },
       select: {
         id: true,
         batchNumber: true,
-        quantity: true,
+        currentQuantity: true,
         expiryDate: true,
       },
     });
@@ -455,7 +456,7 @@ export class InventoryService {
     for (const batch of availableBatches) {
       if (remainingQuantity <= 0) break;
 
-      const allocatedQty = Math.min(batch.quantity, remainingQuantity);
+      const allocatedQty = Math.min(batch.currentQuantity, remainingQuantity);
       allocations.push({
         batchId: batch.id,
         allocatedQuantity: allocatedQty,
@@ -467,7 +468,7 @@ export class InventoryService {
     // Check if we have enough total stock
     if (remainingQuantity > 0) {
       const totalAvailable = availableBatches.reduce(
-        (sum, b) => sum + b.quantity,
+        (sum, b) => sum + b.currentQuantity,
         0,
       );
       throw new BadRequestException(
