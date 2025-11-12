@@ -18,6 +18,7 @@ import { StockAdjustmentModule } from './modules/stock-adjustment/stock-adjustme
 import { PrescriptionModule } from './modules/prescription/prescription.module';
 import { SalesModule } from './modules/sales/sales.module';
 import { PurchaseOrderModule } from './modules/purchase-order/purchase-order.module';
+import { ReportingModule } from './modules/reporting/reporting.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
@@ -89,6 +90,9 @@ import { validateEnvironment } from './config/env.validation';
     // Phase 4: Sales & Purchase Operations
     SalesModule,
     PurchaseOrderModule,
+
+    // Phase 5: Reporting & Analytics
+    ReportingModule,
   ],
   controllers: [AppController],
   providers: [

@@ -4,6 +4,7 @@ import { UuidService } from '../../common/services/uuid.service';
 import { InvoiceGeneratorService } from './utils/invoice-generator.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { ReturnSaleDto } from './dto/return-sale.dto';
+import { UpdateSalePaymentDto } from './dto/update-sale-payment.dto';
 import {
   Prisma,
   SaleStatus,
@@ -144,21 +145,25 @@ export class SalesService {
           const { subtotal, totalDiscount, totalTax, grandTotal } =
             this.calculateTotals(batchAllocations, dto);
 
-          // 7. Validate payment amount
+          // 7. Calculate payment amount and determine status
           const totalPaid = dto.payments.reduce(
             (sum, payment) => sum + payment.amount,
             0,
           );
 
-          if (totalPaid < grandTotal) {
-            throw new Error(
-              `Insufficient payment. Required: ${grandTotal}, Paid: ${totalPaid}`,
-            );
+          // Determine payment status based on amount paid
+          let paymentStatus: PaymentStatus;
+          if (totalPaid >= grandTotal) {
+            paymentStatus = PaymentStatus.PAID;
+          } else if (totalPaid > 0) {
+            paymentStatus = PaymentStatus.PARTIAL;
+          } else {
+            paymentStatus = PaymentStatus.PENDING;
           }
 
-          const changeDue = totalPaid - grandTotal;
+          const changeDue = totalPaid > grandTotal ? totalPaid - grandTotal : 0;
 
-          // 8. Create Sale record
+          // 8. Create Sale record with amountPaid tracking
           const sale = await tx.sale.create({
             data: {
               id: saleId,
@@ -171,8 +176,9 @@ export class SalesService {
               discount: totalDiscount,
               tax: totalTax,
               total: grandTotal,
+              amountPaid: totalPaid,
               paymentMethod: dto.payments[0]?.method || PaymentMethod.CASH,
-              paymentStatus: PaymentStatus.PAID,
+              paymentStatus,
               status: SaleStatus.COMPLETED,
               saleDate: new Date(),
               notes: dto.notes,
@@ -633,6 +639,7 @@ export class SalesService {
           discount: 0,
           tax: 0,
           total: -returnAmount,
+          amountPaid: -returnAmount,
           paymentMethod: originalSale.paymentMethod,
           paymentStatus: PaymentStatus.PAID,
           status: SaleStatus.RETURNED,
@@ -768,6 +775,128 @@ export class SalesService {
           newValues: { status: SaleStatus.CANCELLED, reason } as any,
         },
       });
+
+      return updatedSale;
+    });
+  }
+
+  /**
+   * Update payment for an existing sale (for completing partial payments)
+   *
+   * @param saleId - Sale ID to update payment for
+   * @param additionalAmount - Amount to add to existing payment
+   * @param paymentMethod - Payment method for this payment
+   * @param notes - Optional notes about the payment
+   * @param userId - User making the payment update
+   * @param tenantId - Current tenant ID
+   * @returns Updated sale with new payment status
+   * @throws SaleNotFoundException if sale doesn't exist
+   */
+  async updateSalePayment(
+    saleId: string,
+    additionalAmount: number,
+    paymentMethod: PaymentMethod,
+    notes: string | undefined,
+    userId: string,
+    tenantId: string,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      // Get existing sale
+      const sale = await tx.sale.findUnique({
+        where: { id: saleId, tenantId },
+        select: {
+          id: true,
+          total: true,
+          amountPaid: true,
+          paymentStatus: true,
+          status: true,
+          invoiceNumber: true,
+        },
+      });
+
+      if (!sale) {
+        throw new SaleNotFoundException(saleId);
+      }
+
+      // Validate sale is not cancelled
+      if (sale.status === SaleStatus.CANCELLED) {
+        throw new Error('Cannot update payment for cancelled sale');
+      }
+
+      // Validate sale is not already fully paid
+      if (sale.paymentStatus === PaymentStatus.PAID) {
+        throw new Error('Sale is already fully paid');
+      }
+
+      // Calculate new payment amount
+      const currentPaid = Number(sale.amountPaid);
+      const total = Number(sale.total);
+      const newAmountPaid = currentPaid + additionalAmount;
+
+      // Validate payment doesn't exceed total
+      if (newAmountPaid > total) {
+        throw new Error(
+          `Payment amount exceeds total. Outstanding: ${(total - currentPaid).toFixed(2)}, Attempting to pay: ${additionalAmount.toFixed(2)}`,
+        );
+      }
+
+      // Determine new payment status
+      let newPaymentStatus: PaymentStatus;
+      if (newAmountPaid >= total) {
+        newPaymentStatus = PaymentStatus.PAID;
+      } else if (newAmountPaid > 0) {
+        newPaymentStatus = PaymentStatus.PARTIAL;
+      } else {
+        newPaymentStatus = PaymentStatus.PENDING;
+      }
+
+      // Update sale payment
+      const updatedSale = await tx.sale.update({
+        where: { id: saleId },
+        data: {
+          amountPaid: newAmountPaid,
+          paymentStatus: newPaymentStatus,
+          paymentMethod, // Update to latest payment method
+          notes: notes
+            ? `${sale.invoiceNumber || ''}\nPayment update: ${notes}`
+            : sale.invoiceNumber,
+        },
+        include: {
+          customer: true,
+          saleItems: {
+            include: {
+              product: true,
+              productBatch: true,
+            },
+          },
+        },
+      });
+
+      // Create audit log
+      await tx.auditLog.create({
+        data: {
+          entityType: 'SALE_PAYMENT',
+          entityId: saleId,
+          action: 'UPDATE',
+          userId,
+          tenantId,
+          ipAddress: 'system',
+          oldValues: {
+            amountPaid: currentPaid,
+            paymentStatus: sale.paymentStatus,
+          } as any,
+          newValues: {
+            amountPaid: newAmountPaid,
+            paymentStatus: newPaymentStatus,
+            additionalAmount,
+            notes,
+          } as any,
+        },
+      });
+
+      this.logger.log(
+        `Payment updated for sale ${saleId}: ${currentPaid} → ${newAmountPaid} (Status: ${sale.paymentStatus} → ${newPaymentStatus})`,
+      );
 
       return updatedSale;
     });

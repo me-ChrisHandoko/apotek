@@ -349,6 +349,7 @@ model Sale {
   discount       Decimal       @default(0) @db.Decimal(10, 2)
   tax            Decimal       @default(0) @db.Decimal(10, 2)
   total          Decimal       @db.Decimal(10, 2)
+  amountPaid     Decimal       @default(0) @db.Decimal(10, 2) // Amount already paid
   paymentMethod  PaymentMethod
   paymentStatus  PaymentStatus @default(PENDING)
   status         SaleStatus    @default(COMPLETED)

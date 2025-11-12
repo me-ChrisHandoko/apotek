@@ -10,6 +10,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { SalesService } from './sales.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { ReturnSaleDto } from './dto/return-sale.dto';
+import { UpdateSalePaymentDto } from './dto/update-sale-payment.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -62,5 +63,27 @@ export class SalesController {
     @CurrentTenant() tenantId: string,
   ) {
     return await this.salesService.cancelSale(saleId, userId, tenantId, reason);
+  }
+
+  @Patch(':id/payment')
+  @Roles(UserRole.CASHIER, UserRole.PHARMACIST, UserRole.MANAGER, UserRole.ADMIN)
+  @ApiOperation({ summary: 'Update payment for a sale (complete partial payment)' })
+  @ApiResponse({ status: 200, description: 'Payment updated successfully' })
+  @ApiResponse({ status: 404, description: 'Sale not found' })
+  @ApiResponse({ status: 422, description: 'Payment validation failed' })
+  async updateSalePayment(
+    @Param('id') saleId: string,
+    @Body() dto: UpdateSalePaymentDto,
+    @CurrentUser('id') userId: string,
+    @CurrentTenant() tenantId: string,
+  ) {
+    return await this.salesService.updateSalePayment(
+      saleId,
+      dto.additionalAmount,
+      dto.paymentMethod,
+      dto.notes,
+      userId,
+      tenantId,
+    );
   }
 }
