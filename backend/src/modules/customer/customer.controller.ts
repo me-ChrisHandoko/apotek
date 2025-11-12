@@ -19,17 +19,15 @@ import { CustomerService } from './customer.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
 import { SearchCustomerDto } from './dto/search-customer.dto';
-
-// Note: Import these from Phase 1 when available
-// import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-// import { RolesGuard } from '../../common/guards/roles.guard';
-// import { Roles } from '../../common/decorators/roles.decorator';
-// import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
-// import { UserRole } from '@prisma/client';
+import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
+import { RolesGuard } from '@/common/guards/roles.guard';
+import { Roles } from '@/common/decorators/roles.decorator';
+import { CurrentTenant } from '@/common/decorators/current-tenant.decorator';
+import { UserRole } from '@prisma/client';
 
 @ApiTags('Customers')
 @ApiBearerAuth()
-// @UseGuards(JwtAuthGuard, RolesGuard) // Uncomment when Phase 1 guards are available
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('customers')
 export class CustomerController {
   constructor(private readonly service: CustomerService) {}
@@ -41,10 +39,8 @@ export class CustomerController {
   @ApiResponse({ status: 409, description: 'Customer code already exists' })
   create(
     @Body() dto: CreateCustomerDto,
-    // @CurrentTenant() tenantId: string, // Uncomment when Phase 1 available
+    @CurrentTenant() tenantId: string,
   ) {
-    // Temporary: hardcoded tenantId for testing until Phase 1 is complete
-    const tenantId = 'temp-tenant-id';
     return this.service.create(dto, tenantId);
   }
 
@@ -53,10 +49,8 @@ export class CustomerController {
   @ApiResponse({ status: 200, description: 'Paginated list of customers' })
   findAll(
     @Query() searchDto: SearchCustomerDto,
-    // @CurrentTenant() tenantId: string, // Uncomment when Phase 1 available
+    @CurrentTenant() tenantId: string,
   ) {
-    // Temporary: hardcoded tenantId for testing until Phase 1 is complete
-    const tenantId = 'temp-tenant-id';
     return this.service.findAll(tenantId, searchDto);
   }
 
@@ -64,10 +58,8 @@ export class CustomerController {
   @ApiOperation({ summary: 'Generate next customer code' })
   @ApiResponse({ status: 200, description: 'Generated customer code' })
   generateCode(
-    // @CurrentTenant() tenantId: string, // Uncomment when Phase 1 available
+    @CurrentTenant() tenantId: string,
   ) {
-    // Temporary: hardcoded tenantId for testing until Phase 1 is complete
-    const tenantId = 'temp-tenant-id';
     return this.service.generateCustomerCode(tenantId);
   }
 
@@ -77,10 +69,8 @@ export class CustomerController {
   @ApiResponse({ status: 404, description: 'Customer not found' })
   findOne(
     @Param('id') id: string,
-    // @CurrentTenant() tenantId: string, // Uncomment when Phase 1 available
+    @CurrentTenant() tenantId: string,
   ) {
-    // Temporary: hardcoded tenantId for testing until Phase 1 is complete
-    const tenantId = 'temp-tenant-id';
     return this.service.findOne(id, tenantId);
   }
 
@@ -90,10 +80,8 @@ export class CustomerController {
   @ApiResponse({ status: 404, description: 'Customer not found' })
   getPurchaseHistory(
     @Param('id') id: string,
-    // @CurrentTenant() tenantId: string, // Uncomment when Phase 1 available
+    @CurrentTenant() tenantId: string,
   ) {
-    // Temporary: hardcoded tenantId for testing until Phase 1 is complete
-    const tenantId = 'temp-tenant-id';
     return this.service.getPurchaseHistory(id, tenantId);
   }
 
@@ -103,30 +91,27 @@ export class CustomerController {
   @ApiResponse({ status: 404, description: 'Customer not found' })
   getPrescriptionHistory(
     @Param('id') id: string,
-    // @CurrentTenant() tenantId: string, // Uncomment when Phase 1 available
+    @CurrentTenant() tenantId: string,
   ) {
-    // Temporary: hardcoded tenantId for testing until Phase 1 is complete
-    const tenantId = 'temp-tenant-id';
     return this.service.getPrescriptionHistory(id, tenantId);
   }
 
   @Patch(':id')
+  @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.PHARMACIST)
   @ApiOperation({ summary: 'Update a customer' })
   @ApiResponse({ status: 200, description: 'Customer updated successfully' })
   @ApiResponse({ status: 404, description: 'Customer not found' })
   @ApiResponse({ status: 409, description: 'Customer code already exists' })
-  // @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.PHARMACIST) // Uncomment when Phase 1 available
   update(
     @Param('id') id: string,
     @Body() dto: UpdateCustomerDto,
-    // @CurrentTenant() tenantId: string, // Uncomment when Phase 1 available
+    @CurrentTenant() tenantId: string,
   ) {
-    // Temporary: hardcoded tenantId for testing until Phase 1 is complete
-    const tenantId = 'temp-tenant-id';
     return this.service.update(id, dto, tenantId);
   }
 
   @Delete(':id')
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Delete a customer' })
   @ApiResponse({ status: 200, description: 'Customer deleted successfully' })
   @ApiResponse({ status: 404, description: 'Customer not found' })
@@ -134,13 +119,10 @@ export class CustomerController {
     status: 409,
     description: 'Cannot delete customer with dependencies (sales, prescriptions)',
   })
-  // @Roles(UserRole.ADMIN) // Uncomment when Phase 1 available
   async remove(
     @Param('id') id: string,
-    // @CurrentTenant() tenantId: string, // Uncomment when Phase 1 available
+    @CurrentTenant() tenantId: string,
   ) {
-    // Temporary: hardcoded tenantId for testing until Phase 1 is complete
-    const tenantId = 'temp-tenant-id';
     await this.service.remove(id, tenantId);
     return { message: 'Customer deleted successfully' };
   }

@@ -479,8 +479,10 @@ model AuditLog {
   action     AuditAction
   oldValues  Json? // Values before change
   newValues  Json? // Values after change
+  metadata   Json? // Additional context (DEA schedule, batch info, etc.)
   ipAddress  String?
-  timestamp  DateTime    @default(now())
+  createdAt  DateTime    @default(now())
+  deletedAt  DateTime? // Soft delete for retention policy
 
   // Relations
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
@@ -489,7 +491,8 @@ model AuditLog {
   @@index([tenantId])
   @@index([userId])
   @@index([entityType, entityId])
-  @@index([timestamp])
+  @@index([createdAt])
+  @@index([deletedAt])
 }
 
 // RefreshToken - JWT refresh token storage

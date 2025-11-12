@@ -19,33 +19,29 @@ import {
 import { ProductCategoryService } from './product-category.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
-
-// Note: Import these from Phase 1 when available
-// import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-// import { RolesGuard } from '../../common/guards/roles.guard';
-// import { Roles } from '../../common/decorators/roles.decorator';
-// import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
-// import { UserRole } from '@prisma/client';
+import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
+import { RolesGuard } from '@/common/guards/roles.guard';
+import { Roles } from '@/common/decorators/roles.decorator';
+import { CurrentTenant } from '@/common/decorators/current-tenant.decorator';
+import { UserRole } from '@prisma/client';
 
 @ApiTags('Product Categories')
 @ApiBearerAuth()
-// @UseGuards(JwtAuthGuard, RolesGuard) // Uncomment when Phase 1 guards are available
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('product-categories')
 export class ProductCategoryController {
   constructor(private readonly service: ProductCategoryService) {}
 
   @Post()
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
   @ApiOperation({ summary: 'Create a new product category' })
   @ApiResponse({ status: 201, description: 'Category created successfully' })
   @ApiResponse({ status: 400, description: 'Validation error' })
   @ApiResponse({ status: 409, description: 'Category name already exists' })
-  // @Roles(UserRole.ADMIN, UserRole.MANAGER) // Uncomment when Phase 1 available
   create(
     @Body() dto: CreateCategoryDto,
-    // @CurrentTenant() tenantId: string, // Uncomment when Phase 1 available
+    @CurrentTenant() tenantId: string,
   ) {
-    // Temporary: hardcoded tenantId for testing until Phase 1 is complete
-    const tenantId = 'temp-tenant-id';
     return this.service.create(dto, tenantId);
   }
 
@@ -65,11 +61,8 @@ export class ProductCategoryController {
     @Query('limit') limit?: string,
     @Query('sortBy') sortBy?: string,
     @Query('sortOrder') sortOrder?: 'asc' | 'desc',
-    // @CurrentTenant() tenantId?: string, // Uncomment when Phase 1 available
+    @CurrentTenant() tenantId?: string,
   ) {
-    // Temporary: hardcoded tenantId for testing until Phase 1 is complete
-    const tenantId = 'temp-tenant-id';
-
     return this.service.findAll(tenantId, {
       search,
       isActive: isActive === 'true' ? true : isActive === 'false' ? false : undefined,
@@ -86,30 +79,27 @@ export class ProductCategoryController {
   @ApiResponse({ status: 404, description: 'Category not found' })
   findOne(
     @Param('id') id: string,
-    // @CurrentTenant() tenantId: string, // Uncomment when Phase 1 available
+    @CurrentTenant() tenantId: string,
   ) {
-    // Temporary: hardcoded tenantId for testing until Phase 1 is complete
-    const tenantId = 'temp-tenant-id';
     return this.service.findOne(id, tenantId);
   }
 
   @Patch(':id')
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
   @ApiOperation({ summary: 'Update a product category' })
   @ApiResponse({ status: 200, description: 'Category updated successfully' })
   @ApiResponse({ status: 404, description: 'Category not found' })
   @ApiResponse({ status: 409, description: 'Category name already exists' })
-  // @Roles(UserRole.ADMIN, UserRole.MANAGER) // Uncomment when Phase 1 available
   update(
     @Param('id') id: string,
     @Body() dto: UpdateCategoryDto,
-    // @CurrentTenant() tenantId: string, // Uncomment when Phase 1 available
+    @CurrentTenant() tenantId: string,
   ) {
-    // Temporary: hardcoded tenantId for testing until Phase 1 is complete
-    const tenantId = 'temp-tenant-id';
     return this.service.update(id, dto, tenantId);
   }
 
   @Delete(':id')
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Delete a product category' })
   @ApiResponse({ status: 200, description: 'Category deleted successfully' })
   @ApiResponse({ status: 404, description: 'Category not found' })
@@ -117,13 +107,10 @@ export class ProductCategoryController {
     status: 409,
     description: 'Cannot delete category with associated products',
   })
-  // @Roles(UserRole.ADMIN) // Uncomment when Phase 1 available
   async remove(
     @Param('id') id: string,
-    // @CurrentTenant() tenantId: string, // Uncomment when Phase 1 available
+    @CurrentTenant() tenantId: string,
   ) {
-    // Temporary: hardcoded tenantId for testing until Phase 1 is complete
-    const tenantId = 'temp-tenant-id';
     await this.service.remove(id, tenantId);
     return { message: 'Category deleted successfully' };
   }
