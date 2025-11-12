@@ -1,6 +1,7 @@
 import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { ScheduleModule } from '@nestjs/schedule';
 import { APP_FILTER, APP_INTERCEPTOR, APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { PrismaModule } from './prisma/prisma.module';
@@ -12,6 +13,9 @@ import { ProductCategoryModule } from './modules/product-category/product-catego
 import { ProductModule } from './modules/product/product.module';
 import { CustomerModule } from './modules/customer/customer.module';
 import { SupplierModule } from './modules/supplier/supplier.module';
+import { InventoryModule } from './modules/inventory/inventory.module';
+import { StockAdjustmentModule } from './modules/stock-adjustment/stock-adjustment.module';
+import { PrescriptionModule } from './modules/prescription/prescription.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
@@ -56,6 +60,9 @@ import { validateEnvironment } from './config/env.validation';
       },
     ]),
 
+    // Schedule Module for Cron Jobs
+    ScheduleModule.forRoot(),
+
     // Core Modules
     PrismaModule,
     CommonModule,
@@ -70,6 +77,11 @@ import { validateEnvironment } from './config/env.validation';
     ProductModule,
     CustomerModule,
     SupplierModule,
+
+    // Phase 3: Inventory & Prescription Management
+    InventoryModule,
+    StockAdjustmentModule,
+    PrescriptionModule,
   ],
   controllers: [AppController],
   providers: [
